@@ -47,18 +47,6 @@ func main() {
 	case *versionOption:
 		fmt.Println(versionText)
 		os.Exit(0)
-
-	// Case forces enable
-	case *forceEnableOption:
-		*forceEnableOption = true
-
-	// Case interactive -i
-	case *interactiveOption:
-		*interactiveOption = true
-
-	// Case directory -d (just move empty directory)
-	case *directoryOption:
-		*directoryOption = true
 	}
 
 	// get files
@@ -82,11 +70,8 @@ func CheckArguments(files []string) {
 		destinationError = "rm: missing destination file operand after '%s'\nTry 'rm --help' for more information.\n"
 	)
 
-	// Case files len
-	switch lenFiles {
-
-	// Missing file
-	case 0:
+	// Case files len == 0 : Missing file
+	if lenFiles == 0 {
 		fmt.Println(operandError)
 		os.Exit(0)
 	}
@@ -106,7 +91,9 @@ func RemoveFile(file string) {
 
 	// If force -f option is enable
 	if *forceEnableOption {
-		os.Remove(file)
+		fmt.Println("Force is enables")
+		os.RemoveAll(file)
+		return
 
 	} else {
 		// If -f is disable
@@ -134,14 +121,14 @@ func RemoveFile(file string) {
 			if *recursiveOption {
 				if *interactiveOption {
 
-					// Get user premission to recursive
-					answer := GetUserPremission(file)
+					// Get user permission to recursive
+					answer := GetUserConfirmation(file)
 
-					// If have premission
+					// If have permission
 					if answer == "y" {
 						RemoveWithRecursive(file)
 					} else {
-						// Without premission exit
+						// Without permission exit
 						os.Exit(0)
 					}
 				} else {
@@ -162,7 +149,7 @@ func RemoveFile(file string) {
 				}
 
 			} else {
-				// Cann't remove directory without option
+				// Can't remove directory without option
 				fmt.Println(notDirectory)
 				os.Exit(1)
 			}
@@ -175,7 +162,7 @@ func CheckFileExists(file string) os.FileInfo {
 	// Get the file status
 	fileStatus, err := os.Stat(file)
 
-	// If file not exisist and get error
+	// If file not exist and get error
 	if err != nil && os.IsNotExist(err) {
 		return nil
 	}
@@ -183,8 +170,8 @@ func CheckFileExists(file string) os.FileInfo {
 	return fileStatus
 }
 
-// Get user premission to remove file
-func GetUserPremission(file string) string {
+// Get user permission to remove file
+func GetUserConfirmation(file string) string {
 	answer := ""
 
 	fmt.Printf("Remove %s ? (y/n)", file)
@@ -195,16 +182,16 @@ func GetUserPremission(file string) string {
 
 // Check if have interactive mode then remove file
 func RemoveWithInteractive(file string) {
-	// Get user premission to remove file
-	answer := GetUserPremission(file)
+	// Get user permission to remove file
+	answer := GetUserConfirmation(file)
 
-	// If have premission to remove
+	// If have permission to remove
 	if answer == "y" {
 		os.Remove(file)
 
 	} else {
-		// Not have premission
-		os.Exit(0)
+		// Not have permission
+		return
 	}
 }
 
@@ -212,15 +199,21 @@ func RemoveWithInteractive(file string) {
 func RemoveWithRecursive(filePath string) {
 
 	// Open directory
-	directoy := OpenDirectory(filePath)
+	directory := OpenDirectory(filePath)
+
+	// Close directory
+	defer directory.Close()
+
+	// Move directory
+	defer os.Remove(filePath)
 
 	// Open all file in directory then delete
 	for {
 
 		// Get file name
-		fileNames, err := directoy.Readdirnames(100)
+		fileNames, err := directory.Readdirnames(100)
 
-		// Handl err when open read dir
+		// Handle err when open read dir
 		if err == io.EOF || len(fileNames) == 0 {
 			break
 		}
@@ -231,12 +224,6 @@ func RemoveWithRecursive(filePath string) {
 			RemoveFile(filePath)
 		}
 	}
-
-	// Close directory
-	directoy.Close()
-
-	// Move directory
-	os.Remove(filePath)
 }
 
 func CheckEmptyDirectory(directory string) bool {

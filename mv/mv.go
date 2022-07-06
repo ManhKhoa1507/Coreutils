@@ -77,7 +77,7 @@ func CheckArguments(files []string) {
 		// Get the new location (last args)
 		newLocation := files[lenFiles-1]
 
-		// Re assgign files[], len of files[]
+		// Re assign files[], len of files[]
 		files = files[:lenFiles-1]
 		lenFiles = len(files)
 
@@ -96,7 +96,7 @@ func CheckFileExists(file string) os.FileInfo {
 	// Get the file status
 	fileStatus, err := os.Stat(file)
 
-	// If file not exisist and get error
+	// If file not exist and get error
 	if err != nil && os.IsNotExist(err) {
 		return nil
 	}
@@ -135,20 +135,20 @@ func MoveFile(originFile string, newLocation string) {
 
 			// If file is exist, and option -f is disable
 			if baseStatus != nil && !*forceEnable {
-				MoveWithPremission(originFile, fileBase)
+				MoveWithConfirmation(originFile, fileBase)
 
 			} else if baseStatus != nil && *forceEnable {
 				// Force is enable
 				TryMove(originFile, fileBase)
 
 			} else if baseStatus == nil {
-				// If base file not exist (move don't need premission)
+				// If base file not exist (move don't need permission)
 				TryMove(originFile, fileBase)
 			}
 
 		} else {
 			// If file is not directory
-			MoveWithPremission(originFile, newLocation)
+			MoveWithConfirmation(originFile, newLocation)
 		}
 
 	// If force is enable or newLocation is nil
@@ -188,23 +188,23 @@ func TryMove(originFile string, newLocation string) {
 	}
 }
 
-// Move if have premission
-func MoveWithPremission(originFile string, newLocation string) {
-	// Get user premission
-	answer := GetUserPremission(newLocation)
+// Move if have permission
+func MoveWithConfirmation(originFile string, newLocation string) {
+	// Get user permission
+	answer := GetUserConfirmation(newLocation)
 
 	if answer == "y" {
-		// Have premission, try to move file
+		// Have permission, try to move file
 		TryMove(originFile, newLocation)
 
 	} else {
-		// Not premission
+		// Not permission
 		os.Exit(0)
 	}
 }
 
-// Get user premission to overwrite file
-func GetUserPremission(file string) string {
+// Get user permission to overwrite file
+func GetUserConfirmation(file string) string {
 	answer := ""
 
 	fmt.Printf("File %s is exist. Overwrite(y/n)? ", file)

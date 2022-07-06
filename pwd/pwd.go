@@ -103,21 +103,17 @@ func GetwdWithoutSymLinks() (dir string, err error) {
 	// If the file is a symbolic link, the returned FileInfo describes the symbolic link. Lstat makes no attempt to follow the link.
 	// If there is an error, it will be of type *PathError.
 	directory := ""
-	dot, err := os.Lstat(".")
 
-	// Handle the error when Lstat
-	if err != nil {
-		return "", err
-	}
+	currentDir, _ := GetFileLstat(".")
 
 	pwd := os.Getenv("PWD")
-	isPWD := CheckPWD(pwd, dot)
+	isPWD := CheckPWD(pwd, currentDir)
 
 	// Check if pwd != "" and pwd is not set to another value
 	if isPWD {
-		directory, err = GetPWD(pwd, dot)
+		directory, err = GetPWD(pwd, currentDir)
 	} else {
-		directory, err = GetDir(dot)
+		directory, err = GetDir(currentDir)
 	}
 
 	// Root case with ends is / and no parents
@@ -126,49 +122,40 @@ func GetwdWithoutSymLinks() (dir string, err error) {
 }
 
 // Get the $PWD if set
-func GetPWD(pwdDir string, dot fs.FileInfo) (dir string, err error) {
+func GetPWD(pwdDir string, currentDir fs.FileInfo) (dir string, err error) {
 
 	// Check $PWD is set and first character is /
-	if len(dir) > 0 && dir[0] == '/' {
+	if len(pwdDir) > 0 && pwdDir[0] == '/' {
 
 		// Check the Lstat of $PWD
-		d, err := os.Lstat(dir)
+		d, _ := GetFileLstat(pwdDir)
 
 		// If $PWD is same with dir (./)
-		if err == nil && os.SameFile(dot, d) {
-			return dir, nil
+		if os.SameFile(currentDir, d) {
+			return pwdDir, nil
 		}
 	}
 	return "", nil
 }
 
-func CheckPWD(pwd string, dot fs.FileInfo) bool {
+func CheckPWD(pwd string, currentDir fs.FileInfo) bool {
 
 	if len(pwd) > 0 && pwd[0] == '/' {
-		pwdDir, err := os.Lstat(pwd)
 
-		// Handle error when Lstat pwd
-		if err != nil {
-			fmt.Println("Error when using Lstat")
-		}
+		pwdDir, _ := GetFileLstat(pwd)
 
-		if len(pwd) > 0 && os.SameFile(pwdDir, dot) && err == nil {
+		if len(pwd) > 0 && os.SameFile(pwdDir, currentDir) {
 			return true
 		}
 	}
 	return false
 }
 
-func GetDir(dot fs.FileInfo) (dir string, err error) {
+func GetDir(currentDir fs.FileInfo) (dir string, err error) {
 
 	// Declare directory path, root path
 	directory := ""
-	root, err := os.Lstat("/")
-
-	// Handle error when using Lstat
-	if err != nil {
-		return "", err
-	}
+	root, _ := GetFileLstat("/")
 
 	// Declare and add parent
 	for parent := ".."; ; parent = "../" + parent {
@@ -178,53 +165,86 @@ func GetDir(dot fs.FileInfo) (dir string, err error) {
 			return "", syscall.ENAMETOOLONG
 		}
 
-		// open Parent folder
-		fatherDir, err := os.Open(parent)
+		// Open Parent folder
+		parentDirectory, _ := OpenFile(parent)
+		defer parentDirectory.Close()
 
-		// Handle the error
-		if err != nil {
-			return "", err
-		}
+		// Get parent directory stat, files contains in directory
+		parentStat, _ := GetFileStat(&parentDirectory)
+		files, _ := GetDirName(&parentDirectory)
 
-		for {
-			names, err := fatherDir.Readdirnames(100)
-
-			// Handle error when read dir name
-			if err != nil {
-				return "", err
-			}
-
-			for _, name := range names {
-
-				d, _ := os.Lstat(parent + "/" + name)
-
-				if os.SameFile(d, dot) {
-					// If same file with dot add name and directory path
-					directory = "/" + name + directory
-					goto Found
-
-					// fmt.Println(directory)
-				}
-			}
-		}
-
-	Found:
-		parentDir, err := fatherDir.Stat()
-
-		// Handle error when using Stat()
-		if err != nil {
-			return "", err
-		}
-
-		// Close father dir
-		fatherDir.Close()
+		GetParentDirectory(files, parent, directory, currentDir, parentStat)
 
 		// Check if parent directory = root, then break the loop
-		if os.SameFile(parentDir, root) {
+		if os.SameFile(parentStat, root) {
 			break
 		}
-
-		dot = parentDir
 	}
+
 	return directory, err
+}
+
+// Get the fileStatus using os.Lstat
+func GetFileLstat(filePath string) (fs.FileInfo, error) {
+	file, err := os.Lstat(filePath)
+
+	// Handle error when Lstat the file
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	return file, err
+}
+
+// Open file
+func OpenFile(filePath string) (os.File, error) {
+	file, err := os.Open(filePath)
+
+	// Handle error when open file
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	return *file, err
+}
+
+// Get the dirname
+func GetDirName(filePath *os.File) ([]string, error) {
+	files, err := filePath.Readdirnames(100)
+
+	// Handle error when read dir name
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	return files, err
+}
+
+// Get the fileStatus using os.Lstat
+func GetFileStat(filePath *os.File) (fs.FileInfo, error) {
+	file, err := filePath.Stat()
+
+	// Handle error when Lstat the file
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	return file, err
+}
+
+// Check file in parent directory if similar to the files before
+func GetParentDirectory(files []string, parent string, directory string, currentDir fs.FileInfo, parentStat fs.FileInfo) {
+	for _, file := range files {
+
+		filePath, _ := GetFileLstat(parent + "/" + file)
+
+		if os.SameFile(filePath, currentDir) {
+			// If same file with currentDirectory add name and directory path
+			directory = "/" + file + directory
+			currentDir = parentStat
+		}
+	}
 }
